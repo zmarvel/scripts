@@ -1,5 +1,17 @@
 #!/usr/bin/python
 
+# Calculate Double Factorials
+#
+# Usage:
+#    Compute the double factorial of n:
+#        python double_factorial.py n
+# 
+#    Compute the double factorial of multiple numbers:
+#        python double_factorial.py n1 n2 n3...
+#
+#    Compute n double factorials:
+#        python double_factorial.py -n n  
+
 import sys
 
 def double_factorial(args):
