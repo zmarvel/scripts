@@ -16,10 +16,15 @@ def double_factorial(n):
     return total
 
 if __name__ == '__main__':
-    args = [int(x) for x in sys.argv[1:]]
-    if len(args) < 1:
-        raise Exception('At least one argument--an odd integer--is expected.')
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '-n':
+            args = [int(x) for x in sys.argv[2:]]
+            for x in args:
+                for i in range(1, x + 1):
+                    print double_factorial(2 * i - 2)
+        else:
+            args = [int(x) for x in sys.argv[1:]]
+            for x in args:
+                print double_factorial(x)
     else:
-        for x in args:
-            print double_factorial(x)
-
+        Exception('At least one integer is expected.')
