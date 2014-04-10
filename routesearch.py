@@ -131,7 +131,7 @@ def main(route_path, grass_path, water_paths, db_path=None):
         Session = sessionmaker(bind=engine)
         session = Session()
         
-        route_id = route_path.split('/')[-1][1]
+        route_id = route_path.split('/')[-1].split('-')[-1].split('.')[0]
 
         for patch in route.grass_patches:
             session.add(Patch(3, route_id, 0, patch.x1, patch.y1, patch.x2, patch.y2))
