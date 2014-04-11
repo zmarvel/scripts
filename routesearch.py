@@ -3,7 +3,11 @@ from PIL import Image, ImageChops, ImageMath
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm.exc import NoResultFound
+
 from pokemap.models import Patch, Base
+import pokedex
+import pokedex.db.tables as pdt
 
 
 SPRITE_SIZE = 16
@@ -34,6 +38,13 @@ class Route:
     def __init__(self, route_path, grass_path, water_paths):
         self.route_path = route_path
         self.route = Image.open(route_path)
+        self.route_identifier =\
+            os.path.splitext(os.path.split(route_path)[1])[0]
+
+        if self.route.mode != 'RGBA':
+            self.route = self.route.convert('RGBA')
+            self.route.save(self.route_path)
+
         self.width, self.height = self.route.size
 
         self.grass = Image.open(grass_path)
@@ -120,23 +131,42 @@ class Route:
         return water_patches
         
 
-def main(route_path, grass_path, water_paths, db_path=None):
+def main(route_path, grass_path, water_paths, db_path=None, gen_id=None):
     route = Route(route_path, grass_path, water_paths)
 
     if db_path:
         engine = create_engine('sqlite:///{}'.format(db_path))
-
         Base.metadata.bind = engine
-        
         Session = sessionmaker(bind=engine)
         session = Session()
-        
-        route_id = route_path.split('/')[-1].split('-')[-1].split('.')[0]
+
+        PDSession = pokedex.db.connect()
+
+        location = PDSession.query(pdt.Location)\
+                        .filter(pdt.Location.identifier == route.route_identifier)
+        try:
+            location_id = location.one().id
+        except NoResultFound as e:
+            print('Please rename your file to match a location identifier.')
+            raise e
+            
 
         for patch in route.grass_patches:
-            session.add(Patch(3, route_id, 0, patch.x1, patch.y1, patch.x2, patch.y2))
+            session.add(Patch(gen_id,\
+                location_id,\
+                1,\
+                patch.x1,\
+                patch.y1,\
+                patch.x2,\
+                patch.y2))
         for patch in route.water_patches:
-            session.add(Patch(3, route_id, 0, patch.x1, patch.y1, patch.x2, patch.y2))
+            session.add(Patch(gen_id,\
+                location_id,\
+                2,\
+                patch.x1,\
+                patch.y1,\
+                patch.x2,\
+                patch.y2))
 
         session.commit()
 
@@ -152,8 +182,9 @@ if __name__ == '__main__':
                                 are stored. Grass should be called grass.png,\
                                 and the five water sprites should be called\
                                 water1.png, water2.png, water3.png.... ')
-    parser.add_argument('--commit', action='store', help='this argument should\
-                        be followed by the database URI', nargs=1)
+    parser.add_argument('--commit', action='store',\
+                        help='the game generation of the map and the database URL',\
+                        nargs=2)
 
     args = parser.parse_args()
     route_path = os.path.abspath(args.route_path[0])
@@ -163,8 +194,9 @@ if __name__ == '__main__':
                     range(1, 6)]
 
     if args.commit:
-        db_path = os.path.abspath(args.commit[0])
-        patches = main(route_path, grass_path, water_paths, db_path)
+        db_path = os.path.abspath(args.commit[1])
+        gen_id = args.commit[0]
+        patches = main(route_path, grass_path, water_paths, db_path, gen_id)
     else:
         patches = main(route_path, grass_path, water_paths)
 
