@@ -28,7 +28,7 @@ class WaterPatch:
         self.x1 = x1
         # Water has a border on the right side that doesn't have to be checked--
         # it can be assumed, so we add an extra 16px to allow for that.
-        self.x2 = x2 + SPRITE_SIZE
+        self.x2 = x2
         self.y1 = y
         self.y2 = y + SPRITE_SIZE
     def add_water(self):
@@ -41,15 +41,29 @@ class Route:
         self.route_identifier =\
             os.path.splitext(os.path.split(route_path)[1])[0]
 
-        if self.route.mode != 'RGBA':
-            self.route = self.route.convert('RGBA')
+        if self.route.mode != 'RGB':
+            self.route = self.route.convert('RGB')
             self.route.save(self.route_path)
 
         self.width, self.height = self.route.size
 
         self.grass = Image.open(grass_path)
+        
+        if self.grass.mode != 'RGB':
+            self.grass = self.grass.convert('RGB')
 
-        self.waters = [Image.open(x) for x in water_paths]
+        self.grass_colors = [(56, 144, 48),\
+                                (112, 200, 160),\
+                                (64, 176, 136),\
+                                (56, 88, 16),\
+                                (160, 224, 192),\
+                                (24, 160, 104)]
+
+        self.water_colors = set([(96, 160, 216),\
+                                 (72, 120, 216),\
+                                 (48, 96, 160),\
+                                 (48, 96, 176),\
+                                 (72, 144, 216)])
         
         self.xstart, self.ystart = self.find_grass_start()
         self.xoffset = self.xstart % SPRITE_SIZE
@@ -66,6 +80,21 @@ class Route:
             return True
         else:
             return False
+
+    def has_water(self, image):
+        image_colors = sorted(image.getcolors(), key=lambda x: -x[0])
+        image_colors = filter(lambda x: x[1] in self.water_colors, image_colors[:2])
+        if len(image_colors) == 2\
+            or (image_colors and image_colors[0][0] >= 224):
+            return True
+        return False
+
+    def has_grass(self, image):
+        image_colors = sorted(image.getcolors(), key=lambda x: -x[0])
+        image_colors = [x[1] for x in image_colors]
+        if image_colors == grass_colors:
+            return True
+        return False
 
     # Find the first patch of grass to determine if there is an offset to the
     # grid
@@ -117,14 +146,13 @@ class Route:
 
                 square = self.route.crop((x1, y1, x2, y2))
                 
-                for water in self.waters:
-                    if self.sprite_same(water, square):
-                        if water_patches and\
-                            water_patches[-1].y1 == y1 and\
-                            water_patches[-1].x2 == x1:
-                            water_patches[-1].add_water()
-                        else:
-                            water_patches.append(WaterPatch(x1, x2, y1))
+                if self.has_water(square):
+                    if water_patches and\
+                        water_patches[-1].y1 == y1 and\
+                        water_patches[-1].x2 == x1:
+                        water_patches[-1].add_water()
+                    else:
+                        water_patches.append(WaterPatch(x1, x2, y1))
                 x1 += SPRITE_SIZE
             y1 += SPRITE_SIZE
 
