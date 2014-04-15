@@ -212,6 +212,7 @@ def main():
     parser = argparse.ArgumentParser(description=u'Find tall grass and water in Pokemon routes.')
     parser.add_argument(u'gen_id', metavar=u'generation', nargs=1)
     parser.add_argument(u'route_dir', metavar=u'routes_dir', nargs=1)
+    parser.add_argument(u'--one', action=u'store', nargs=1)
     parser.add_argument(u'--commit', action=u'store', nargs=1)
     args = parser.parse_args()
     
@@ -219,8 +220,11 @@ def main():
 
 
     gen_id = args.gen_id[0]
-    route_dir = os.path.abspath(args.route_dir[0])
-    route_paths = [os.path.join(route_dir, x) for x in os.listdir(route_dir)]
+    if args.route_dir:
+        route_dir = os.path.abspath(args.route_dir[0])
+        route_paths = [os.path.join(route_dir, x) for x in os.listdir(route_dir)]
+    elif args.one:
+        route_paths = list(os.path.abspath(args.one[0]))
     
     
     routes = []
