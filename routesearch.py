@@ -56,18 +56,42 @@ class Route:
 
         self.width, self.height = self.route.size
 
-        self.grass_colors =  [(48, (56, 88, 16)),
-                                (18, (160, 224, 192)),
-                                (64, (112, 200, 160)),
-                                (52, (64, 176, 136)),
-                                (68, (56, 144, 48)),
-                                (6, (24, 160, 104))]
+        # This is hacky but it'll do until I start working on red and blue etc
+        if location.region_id == 1:
+            self.grass_colors =  [(48, (56, 88, 16)),
+                                    (18, (160, 224, 192)),
+                                    (64, (112, 200, 160)),
+                                    (52, (64, 176, 136)),
+                                    (68, (56, 144, 48)),
+                                    (6, (24, 160, 104))]
+            self.grass_colors2 = [(48, (40, 64, 8)),
+                                    (18, (128, 176, 152)),
+                                    (64, (88, 160, 128)),
+                                    (52, (48, 136, 104)),
+                                    (68, (40, 112, 32)),
+                                    (6, (16, 128, 80))]
 
-        self.water_colors = set([(96, 160, 216),\
-                                 (72, 120, 216),\
-                                 (48, 96, 160),\
-                                 (48, 96, 176),\
-                                 (72, 144, 216)])
+            self.water_colors = set([(96, 160, 216),\
+                                    (72, 120, 216),\
+                                    (48, 96, 160),\
+                                    (48, 96, 176),\
+                                    (72, 144, 216)])
+        elif location.region_id == 3:
+            self.grass_colors = [(18, (160, 208, 192)),
+                                    (89, (112, 192, 160)),
+                                    (71, (56, 80, 0)),
+                                    (78, (24, 160, 104))]
+
+            self.grass_colors2 = [(15, (56, 80, 0)),
+                                    (49, (176, 248, 128)),
+                                    (47, (128, 192, 96)),
+                                    (18, (112, 192, 160)),
+                                    (1, (64, 176, 128)),
+                                    (126, (56, 136, 48))]
+
+            self.water_colors = [(80, 104, 208),
+                                    (104, 128, 208),
+                                    (112, 184, 240)]
         
         self.xstart, self.ystart = self.find_grass_start()
         if self.xstart is None:
@@ -103,7 +127,8 @@ class Route:
     # the same colors, and this is faster than actually comparing the sprite.
     def has_grass(self, image):
         image_colors = image.getcolors()
-        if image_colors == self.grass_colors:
+        if image_colors == self.grass_colors\
+            or image_colors == self.grass_colors2:
             return True
         return False
 
@@ -211,20 +236,36 @@ class Route:
 def main():
     parser = argparse.ArgumentParser(description=u'Find tall grass and water in Pokemon routes.')
     parser.add_argument(u'gen_id', metavar=u'generation', nargs=1)
-    parser.add_argument(u'route_dir', metavar=u'routes_dir', nargs=1)
+    parser.add_argument(u'--dir', action=u'store', nargs=1)
     parser.add_argument(u'--one', action=u'store', nargs=1)
     parser.add_argument(u'--commit', action=u'store', nargs=1)
     args = parser.parse_args()
     
     PDSession = pokedex.db.connect()
 
+    try:
+        db_path = os.path.abspath(args.commit[0])
+        engine = create_engine(u'sqlite:///{}'.format(db_path))
+        Base.metadata.bind = engine
+        Session = sessionmaker(bind=engine)
+        session = Session()
+    except:
+        if args.commit:
+            print(u'Error: Could not connect to Pokemap database.')
+            raise
+        else:
+            pass
+
 
     gen_id = args.gen_id[0]
-    if args.route_dir:
-        route_dir = os.path.abspath(args.route_dir[0])
+    if args.dir:
+        route_dir = os.path.abspath(args.dir[0])
         route_paths = [os.path.join(route_dir, x) for x in os.listdir(route_dir)]
+        for path in route_paths:
+            print(u'Found {}.'.format(path))
     elif args.one:
-        route_paths = list(os.path.abspath(args.one[0]))
+        route_paths = [os.path.abspath(args.one[0])]
+        print(u'Found {}.'.format(route_paths[0]))
     
     
     routes = []
@@ -239,33 +280,44 @@ def main():
             print(u'{} does not match a route identifier in the Pokedex'\
                     .format(route_identifier))
             raise e
-        print(u'Processing {}...'.format(location.name))
-        routes.append(Route(gen_id, route_path, location))
-        grass_total = len(routes[-1].grass_patches)
-        water_total = len(routes[-1].water_patches)
-        print(u'...found {} grass patches'.format(grass_total))
-        print(u'...found {} water patches'.format(water_total))
+
+        if args.commit:
+            q = session.query(Patch)\
+                    .filter(Patch.location_id == location.id)
+            if q.count() == 0:
+                print(u'Processing {}...'.format(location.name))
+                routes.append(Route(gen_id, route_path, location))
+                grass_total = len(routes[-1].grass_patches)
+                water_total = len(routes[-1].water_patches)
+                print(u'...found {} grass patches'.format(grass_total))
+                print(u'...found {} water patches'.format(water_total))
+            else:
+                print(u'{} is already in the database. Skipping.'\
+                        .format(location.name))
+        else:
+            print(u'Processing {}...'.format(location.name))
+            routes.append(Route(gen_id, route_path, location))
+            grass_total = len(routes[-1].grass_patches)
+            water_total = len(routes[-1].water_patches)
+            print(u'...found {} grass patches'.format(grass_total))
+            print(u'...found {} water patches'.format(water_total))
+            
 
     if args.commit:
-        db_path = os.path.abspath(args.commit[0])
-        engine = create_engine(u'sqlite:///{}'.format(db_path))
-        Base.metadata.bind = engine
-        Session = sessionmaker(bind=engine)
-        session = Session()
-
-        for route in routes:
-            route.session = session
-            try:
+        try:
+            for route in routes:
+                route.session = session
                 route.add_patches()
-                session.commit()
-            except:
-                print(u'Error: Rolling back changes...')
-                session.rollback()
-                raise
-            finally:
-                print(u'Closing the session...')
-                session.close()
+            session.commit()
             print(u'All routes were added.')
+        except:
+            print(u'Error: Rolling back changes...')
+            session.rollback()
+            raise
+        finally:
+            print(u'Closing the session...')
+            session.close()
+            
     else:
         for route in routes:
             print(repr(route))
